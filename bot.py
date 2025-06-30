@@ -1,7 +1,7 @@
 import logging
 import os
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters # NEW: Import MessageHandler and filters
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.constants import ParseMode
 
 # --- Configuration ---
@@ -17,18 +17,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # --- Bot Command Handlers ---
 
+# UPDATED: The start message now includes your credit.
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Handles the /start command.
-    Greets the user and extracts their User ID and Profile Photo ID.
+    Handles the /start and /help commands.
+    Greets the user, provides info, and extracts their User ID and Profile Photo ID.
     """
     user = update.effective_user
     user_id = user.id
     
-    logger.info(f"User {user.full_name} ({user_id}) started the bot.")
+    logger.info(f"User {user.full_name} ({user_id}) started the bot or asked for help.")
+    
+    # NOTE: I've assumed your channel link is t.me/RexonBlack. If it's different, change it below.
+    credit_line = "Made with ❤️ by [RexonBlack](https://t.me/RexonBlack)"
     
     message_text = (
         f"👋 Hello, {user.full_name}!\n\n"
@@ -41,25 +44,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if photos and photos.photos:
             highest_res_photo = photos.photos[0][-1]
             photo_id = highest_res_photo.file_id
-            
-            message_text += (
-                f"🖼️ **Your Current Profile Photo ID:**\n"
-                f"`{photo_id}`\n\n"
-            )
+            message_text += f"🖼️ **Your Current Profile Photo ID:**\n`{photo_id}`\n\n"
         else:
             message_text += "🖼️ You do not have a profile picture set.\n\n"
     except Exception as e:
         logger.error(f"Could not fetch profile photo for user {user_id}: {e}")
         message_text += "🖼️ Could not retrieve profile picture information.\n\n"
 
-    message_text += "➡️ **To get a photo's File ID, just send me the photo!**"
+    message_text += "➡️ **To get a photo's File ID, just send me the photo!**\n\n"
+    message_text += f"——\n{credit_line}"
 
     await update.message.reply_text(
         text=message_text,
-        parse_mode=ParseMode.MARKDOWN
+        parse_mode=ParseMode.MARKDOWN,
+        disable_web_page_preview=True # Good practice for credit links
     )
 
-# NEW: Handler for photos
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handles incoming photos and sends back their file_id.
@@ -67,13 +67,8 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user = update.effective_user
     logger.info(f"User {user.full_name} ({user.id}) sent a photo.")
     
-    # When you send a photo, Telegram provides it in several resolutions.
-    # The `update.message.photo` is a list of these resolutions.
-    # The last one in the list (`-1`) is always the highest quality.
     highest_res_photo = update.message.photo[-1]
     file_id = highest_res_photo.file_id
-    
-    # You can also get other info like width, height, and file size
     width = highest_res_photo.width
     height = highest_res_photo.height
     file_size_kb = round(highest_res_photo.file_size / 1024, 1) if highest_res_photo.file_size else 'N/A'
@@ -85,7 +80,6 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"💾 **File Size:** ~{file_size_kb} KB"
     )
     
-    # Reply directly to the photo the user sent
     await update.message.reply_text(
         text=response_text,
         parse_mode=ParseMode.MARKDOWN
@@ -100,7 +94,8 @@ def main() -> None:
     
     # Register handlers
     application.add_handler(CommandHandler("start", start))
-    # NEW: Register the photo handler. It will trigger for any message that is a photo.
+    # NEW: The /help command will now also trigger the start function
+    application.add_handler(CommandHandler("help", start)) 
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     
     port = int(os.environ.get('PORT', '8443'))
