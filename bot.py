@@ -1,15 +1,15 @@
 import logging
 import os
-import base64 # NEW: For encoding the links
+import base64 # For encoding the links
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.constants import ParseMode
-from telegram.error import BadRequest # NEW: To handle errors gracefully
+from telegram.error import BadRequest # To handle errors gracefully
 
 # --- Configuration ---
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
-# NEW: Get the Database Channel ID from environment variables
+# Get the Database Channel ID from environment variables
 DATABASE_CHANNEL_ID = os.environ.get("DATABASE_CHANNEL_ID")
 
 if not BOT_TOKEN:
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # --- Bot Handlers ---
 
-# UPDATED: The start function now handles deep linking for file sharing
+# The start function now handles deep linking for file sharing
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /start command, including deep linking."""
     user = update.effective_user
@@ -61,7 +61,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Regular /start command without a payload
         await show_welcome_message(update, context)
 
-# NEW: A dedicated function for the welcome/help message
+# A dedicated function for the welcome/help message
 async def show_welcome_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends the standard welcome/help message."""
     user_id = update.effective_user.id
@@ -82,7 +82,7 @@ async def show_welcome_message(update: Update, context: ContextTypes.DEFAULT_TYP
         disable_web_page_preview=True
     )
     
-# NEW: A universal handler for all file types
+# A universal handler for all file types
 async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles incoming files, forwards them, and generates a shareable link."""
     user = update.effective_user
@@ -122,8 +122,9 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("help", show_welcome_message))
     
-    # NEW: A single handler for all supported file types
-    file_filters = filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.DOCUMENT
+    # A single handler for all supported file types
+    # THIS IS THE CORRECTED LINE:
+    file_filters = filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.Document
     application.add_handler(MessageHandler(file_filters, file_handler))
     
     port = int(os.environ.get('PORT', '8443'))
