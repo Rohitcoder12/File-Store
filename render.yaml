@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: your-bot-name # IMPORTANT: Change this to your service name on Render
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        fromService:
+          type: web
+          name: your-bot-name # Change this again
+          envVarKey: BOT_TOKEN
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: your-bot-name # And this one
+          envVarKey: WEBHOOK_URL
+      - key: DATABASE_CHANNEL_ID
+        fromService:
+          type: web
+          name: your-bot-name # And finally this one
+          envVarKey: DATABASE_CHANNEL_ID
+      - key: PYTHON_VERSION
+        value: 3.11.4
