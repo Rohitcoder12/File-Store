@@ -118,14 +118,17 @@ def main() -> None:
     """Sets up and runs the bot."""
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Register handlers
+    # Register command handlers
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("help", show_welcome_message))
     
-    # A single handler for all supported file types
-    # THIS IS THE CORRECTED LINE:
-    file_filters = filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.Document
-    application.add_handler(MessageHandler(file_filters, file_handler))
+    # THIS IS THE CORRECTED SECTION:
+    # Register a separate handler for each file type to avoid internal library errors.
+    # All handlers point to the same file_handler function.
+    application.add_handler(MessageHandler(filters.PHOTO, file_handler))
+    application.add_handler(MessageHandler(filters.VIDEO, file_handler))
+    application.add_handler(MessageHandler(filters.AUDIO, file_handler))
+    application.add_handler(MessageHandler(filters.Document, file_handler))
     
     port = int(os.environ.get('PORT', '8443'))
     
