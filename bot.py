@@ -148,7 +148,6 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.PHOTO, file_handler))
     application.add_handler(MessageHandler(filters.VIDEO, file_handler))
     application.add_handler(MessageHandler(filters.AUDIO, file_handler))
-    # THIS IS THE FINAL CORRECTION:
     application.add_handler(MessageHandler(filters.DOCUMENT, file_handler))
     
     port = int(os.environ.get('PORT', '8443'))
