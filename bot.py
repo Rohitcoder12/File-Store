@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # --- Bot Handlers ---
 
-# UPDATED: start_handler now decodes file_type and file_id to send a new message
+# start_handler now decodes file_type and file_id to send a new message
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /start command, including deep linking for sending files."""
     user = update.effective_user
@@ -88,7 +88,7 @@ async def show_welcome_message(update: Update, context: ContextTypes.DEFAULT_TYP
         disable_web_page_preview=True
     )
     
-# UPDATED: file_handler now extracts file_id and file_type to create the link
+# file_handler now extracts file_id and file_type to create the link
 async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles incoming files, extracts info, and generates a shareable link."""
     user = update.effective_user
@@ -144,11 +144,12 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("help", show_welcome_message))
     
-    # Register a separate handler for each file type
+    # Register a handler for each file type with the CORRECT filter names
     application.add_handler(MessageHandler(filters.PHOTO, file_handler))
     application.add_handler(MessageHandler(filters.VIDEO, file_handler))
     application.add_handler(MessageHandler(filters.AUDIO, file_handler))
-    application.add_handler(MessageHandler(filters.Document, file_handler))
+    # THIS IS THE FINAL CORRECTION:
+    application.add_handler(MessageHandler(filters.DOCUMENT, file_handler))
     
     port = int(os.environ.get('PORT', '8443'))
     
