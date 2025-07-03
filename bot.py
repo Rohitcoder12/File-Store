@@ -114,3 +114,33 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# generate_session.py
+import asyncio
+from pyrogram import Client
+
+async def main():
+    print("--- Pyrogram Session String Generator ---")
+    
+    # Prompt for API credentials
+    try:
+        api_id = int(input("Enter your API ID: "))
+        api_hash = input("Enter your API HASH: ")
+    except ValueError:
+        print("Error: API ID must be a number.")
+        return
+
+    # Use an in-memory session to avoid creating files
+    async with Client(":memory:", api_id=api_id, api_hash=api_hash) as app:
+        print("\nLogging in to your account...")
+        
+        # The export_session_string() method handles the entire login flow
+        session_string = await app.export_session_string()
+        
+        print("\n--- LOGIN SUCCESSFUL! ---")
+        print("This is your session string. Copy it and keep it SECRET and SAFE!\n")
+        print(f"SESSION STRING:\n\n{session_string}\n")
+        print("Paste this value into the SESSION_STRING environment variable on your hosting platform.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
