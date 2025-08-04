@@ -17,113 +17,75 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-# --- NEW: Helper function to get the source of a forward ---
-def get_forward_source_text(message: Message) -> str:
-    """Checks if a message is forwarded and returns a formatted string with the source's info."""
-    if not message.forward_origin:
-        return ""  # Not a forward, return empty string
+# --- NEW: A Universal Handler for ALL Forwarded Messages ---
+async def universal_forward_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles any forwarded message, extracts media and source IDs."""
+    message = update.effective_message
+    response_text = ""
+    
+    # --- Part 1: Extract Media ID if it exists ---
+    if message.photo:
+        response_text += f"🖼️ **Photo File ID:**\n`{message.photo[-1].file_id}`\n\n"
+    elif message.video:
+        response_text += f"📹 **Video File ID:**\n`{message.video.file_id}`\n\n"
+        if message.video.thumbnail:
+            response_text += f"🖼️ **Thumbnail File ID:**\n`{message.video.thumbnail.file_id}`\n\n"
+    elif message.sticker:
+        response_text += f"🎨 **Sticker File ID:**\n`{message.sticker.file_id}`\n\n"
+    # Note: You can add more media types here like audio or document if needed.
 
+    # --- Part 2: Extract the Source ID ---
     origin = message.forward_origin
     source_text = ""
-
     if origin.type == 'user':
         sender = origin.sender_user
         source_text = f"👤 **Source:** {sender.full_name} (`{sender.id}`)"
     elif origin.type == 'hidden_user':
-        source_text = f"👤 **Source:** {origin.sender_user_name} (ID Hidden by Privacy)"
+        source_text = f"👤 **Source:** {origin.sender_user_name} (ID Hidden)"
     elif origin.type == 'channel':
         chat = origin.chat
         source_text = f"📢 **Source:** {chat.title} (`{chat.id}`)"
-    
-    return f"\n\n{source_text}" if source_text else ""
+
+    response_text += source_text
+
+    # --- Part 3: Send the combined response ---
+    if response_text:
+        await message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
 
-# --- Handlers ---
+# --- Standard Handlers (Now Simplified) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    await update.message.reply_text(
-        f"👋 Hello, {user.full_name}!\n\nI am an advanced Id Extractor Bot.\n\nType /help to see everything I can do!"
-    )
+    await update.message.reply_text(f"👋 Hello, {update.effective_user.full_name}!\n\nI am Id Extractor Bot. Forward any message or send me any media to get its ID.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    help_text = (
-        "ℹ️ **Here's what I can do:**\n\n"
-        "🔹 `/id` or `/info`\n"
-        "   - Send this command to get your own User ID.\n"
-        "   - Reply to a message with this command to get that user's ID.\n\n"
-        "🔹 `/chatid`\n"
-        "   - Get the ID of the current chat (group or private).\n\n"
-        "🔗 **Share a Contact/Chat**\n"
-        "   - Share a user, bot, group, or channel with me to instantly get its ID.\n\n"
-        "📹 **Send or Forward any Media**\n"
-        "   - I'll reply with its `file_id` and the original source's ID if it's a forward."
-    )
+    help_text = "ℹ️ **How to use me:**\n\n• **Forward any message:** I will give you the original sender's ID (user, bot, or channel).\n\n• **Send me any media:** I will give you the File ID for any photo, video, or sticker.\n\n• **/id:** Get your own User ID.\n\n• **/chatid:** Get the current chat's ID."
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
 async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles /id. Now only processes replies and the user's own ID."""
-    message = update.effective_message
-    response_text = ""
-    if message.reply_to_message:
-        replied_user = message.reply_to_message.from_user
-        response_text = f"👤 **User ID (from reply):** `{replied_user.id}`"
-    else:
-        user = update.effective_user
-        response_text = f"👤 **Your User ID is:** `{user.id}`"
-    await message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"👤 **Your User ID is:** `{update.effective_user.id}`", parse_mode=ParseMode.MARKDOWN)
 
 async def chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    await update.message.reply_text(f"🌐 **This Chat's ID is:**\n`{chat_id}`", parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(f"🌐 **This Chat's ID is:** `{update.effective_chat.id}`", parse_mode=ParseMode.MARKDOWN)
 
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     contact = update.message.contact
-    shared_id = contact.user_id 
-    if contact.first_name and not contact.last_name:
-        response_text = f"🌐 **Shared Chat/Channel ID:** `{shared_id}`"
-    else:
-        response_text = f"👤 **Shared User/Bot ID:** `{shared_id}`"
+    await update.message.reply_text(f"👤 **Shared User/Bot ID:** `{contact.user_id}`", parse_mode=ParseMode.MARKDOWN)
+
+# These handlers now only work for DIRECTLY sent media
+async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    response_text = f"📹 **Video File ID:**\n`{update.message.video.file_id}`"
     await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
-# --- MODIFIED Media Handlers ---
-async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    video = message.video
-    
-    # Get media info
-    response_text = f"📹 **Video File ID:**\n`{video.file_id}`"
-    if video.thumbnail:
-        response_text += f"\n\n🖼️ **Thumbnail File ID:**\n`{video.thumbnail.file_id}`"
-    
-    # Get forward info and add it to the response
-    response_text += get_forward_source_text(message)
-    
-    await message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
-
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    
-    # Get media info
-    response_text = f"🖼️ **Photo File ID:**\n`{message.photo[-1].file_id}`"
-    
-    # Get forward info and add it to the response
-    response_text += get_forward_source_text(message)
-    
-    await message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
+    response_text = f"🖼️ **Photo File ID:**\n`{update.message.photo[-1].file_id}`"
+    await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
 async def sticker_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    
-    # Get media info
-    response_text = f"🎨 **Sticker File ID:**\n`{message.sticker.file_id}`"
-    
-    # Get forward info and add it to the response
-    response_text += get_forward_source_text(message)
-
-    await message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
+    response_text = f"🎨 **Sticker File ID:**\n`{update.message.sticker.file_id}`"
+    await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
 
-# --- Main Bot Logic (Simplified) ---
+# --- Main Bot Logic ---
 def main() -> None:
     """Sets up and runs the bot."""
     application = Application.builder().token(BOT_TOKEN).build()
@@ -134,14 +96,14 @@ def main() -> None:
     application.add_handler(CommandHandler(("id", "info"), id_handler))
     application.add_handler(CommandHandler("chatid", chat_id_handler))
     
-    # Message handlers
-    # These now handle both direct sends and forwards of their specific media type.
+    # NEW: The single, powerful handler for ALL forwarded messages
+    application.add_handler(MessageHandler(filters.FORWARDED, universal_forward_handler))
+
+    # Handlers for DIRECTLY SENT messages
     application.add_handler(MessageHandler(filters.VIDEO, video_handler))
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_handler))
     application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
-
-    # The general filters.FORWARDED handler is now removed to prevent double replies.
     
     port = int(os.environ.get('PORT', '10000'))
     logger.info(f"Starting bot on port {port}")
