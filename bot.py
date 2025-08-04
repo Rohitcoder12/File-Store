@@ -2,17 +2,9 @@
 
 import logging
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-# NEW: Import PicklePersistence
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-    CallbackQueryHandler,
-    PicklePersistence
-)
+# Imports are now simplified
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.constants import ParseMode
 
 # --- Configuration (Unchanged) ---
@@ -26,7 +18,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-# --- Handlers (Unchanged) ---
+# --- Handlers ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
@@ -34,6 +26,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays a detailed help message (updated)."""
     help_text = (
         "ℹ️ **Here's what I can do:**\n\n"
         "🔹 `/id` or `/info`\n"
@@ -45,9 +38,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🔗 **Share a Contact/Chat**\n"
         "   - Share a user, bot, group, or channel with me to instantly get its ID.\n\n"
         "📹 **Send me any video**\n"
-        "   - I'll reply with its `file_id` and a button to extract the thumbnail.\n\n"
+        "   - I'll reply with its `file_id` and the thumbnail's `file_id`.\n\n"
         "📷 **Send me any photo**\n"
-        "   - I'll reply with its `file_id` and other details.\n\n"
+        "   - I'll reply with its `file_id`.\n\n"
         "🎨 **Send me any sticker**\n"
         "   - I'll reply with its `file_id`."
     )
@@ -84,45 +77,19 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         response_text = f"👤 **Shared User ID:** `{chat_id}`"
     await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
-# --- The logic for these two handlers is now reliable thanks to persistence ---
+# --- Simplified video_handler ---
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles incoming videos and sends back all relevant file_ids in a text message."""
     video = update.message.video
-    response_text = f"✅ Video received!\n\n📹 **Video File ID:**\n`{video.file_id}`"
-    
-    reply_markup = None
+    response_text = (
+        f"✅ Video received!\n\n"
+        f"📹 **Video File ID:**\n`{video.file_id}`"
+    )
+
     if video.thumbnail:
-        # We send the message and get its ID to use as a key
-        sent_message = await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
-        message_id = sent_message.message_id
-        
-        # Store the thumbnail_id in persistent chat_data
-        context.chat_data[message_id] = video.thumbnail.file_id
-        
-        button = InlineKeyboardButton("Extract Thumbnail 🖼️", callback_data=f"get_thumb:{message_id}")
-        reply_markup = InlineKeyboardMarkup([[button]])
-
-        # Edit the message to add the button
-        await sent_message.edit_reply_markup(reply_markup=reply_markup)
-    else:
-        # If no thumbnail, just send the text
-        await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
-
-async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-
-    if data.startswith("get_thumb:"):
-        message_id = int(data.split(":", 1)[1])
-        # Retrieve the thumbnail_id from our persistent storage
-        thumbnail_id = context.chat_data.pop(message_id, None)
-
-        if thumbnail_id:
-            caption = f"✅ Here is the thumbnail.\n\n**File ID:**\n`{thumbnail_id}`"
-            await query.message.reply_photo(photo=thumbnail_id, caption=caption, parse_mode=ParseMode.MARKDOWN)
-            await query.edit_message_reply_markup(reply_markup=None)
-        else:
-            await query.edit_message_text(text="This button has expired or the bot was recently updated. Please send the video again.")
+        response_text += f"\n\n🖼️ **Thumbnail File ID:**\n`{video.thumbnail.file_id}`"
+    
+    await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
 async def sticker_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     sticker = update.message.sticker
@@ -134,22 +101,14 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     response_text = f"🖼️ **Photo File ID:**\n`{file_id}`"
     await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
-# --- Main Bot Logic with Persistence ---
-def main() -> None:
-    """Sets up and runs the bot with persistence."""
-    # NEW: Create a persistence object
-    # This will create a file named "bot_persistence" in your project directory
-    persistence = PicklePersistence(filepath="bot_persistence")
 
-    # NEW: Add the persistence object to the Application Builder
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .persistence(persistence)
-        .build()
-    )
+# --- Main Bot Logic (Simplified) ---
+def main() -> None:
+    """Sets up and runs the bot without persistence."""
+    # The Application builder is now simpler, with no persistence.
+    application = Application.builder().token(BOT_TOKEN).build()
     
-    # Register all handlers (unchanged)
+    # Register all handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler(("id", "info"), id_handler))
@@ -161,7 +120,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.FORWARDED, id_handler))
     application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
 
-    application.add_handler(CallbackQueryHandler(button_callback_handler))
+    # The CallbackQueryHandler has been removed.
     
     port = int(os.environ.get('PORT', '10000'))
     logger.info(f"Starting bot on port {port}")
