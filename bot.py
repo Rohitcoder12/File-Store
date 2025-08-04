@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-# --- Command Handlers (Unchanged) ---
+# --- Handlers (Unchanged) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
@@ -75,73 +75,59 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         response_text = f"👤 **Shared User ID:** `{chat_id}`"
     await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
-# --- MODIFIED: Video Handler using context to store file_id ---
+
+# --- CORRECTED video_handler ---
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles incoming videos, storing thumbnail_id in context."""
     video = update.message.video
-    response_text = (
-        f"✅ Video received!\n\n"
-        f"📹 **Video File ID:**\n`{video.file_id}`"
-    )
+    response_text = f"✅ Video received!\n\n📹 **Video File ID:**\n`{video.file_id}`"
 
-    reply_markup = None
     # First, send the message without a button
-    sent_message = await update.message.reply_text(
-        text=response_text,
-        parse_mode=ParseMode.MARKDOWN
-    )
+    sent_message = await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
     
     # Now, if there's a thumbnail, edit the message to add the button
     if video.thumbnail and sent_message:
         thumbnail_file_id = video.thumbnail.file_id
         message_id = sent_message.message_id
         
-        # Store the thumbnail_id in chat_data using the message_id as the key
-        if not context.chat_data:
-            context.chat_data = {}
+        # --- THIS IS THE FIX ---
+        # Directly assign the key-value pair. Do NOT re-assign context.chat_data.
         context.chat_data[message_id] = thumbnail_file_id
         
-        # The callback_data now contains the short message_id
         button = InlineKeyboardButton("Extract Thumbnail 🖼️", callback_data=f"get_thumb:{message_id}")
         reply_markup = InlineKeyboardMarkup([[button]])
         
-        await context.bot.edit_message_reply_markup(
-            chat_id=update.effective_chat.id,
-            message_id=message_id,
-            reply_markup=reply_markup
-        )
+        try:
+            await context.bot.edit_message_reply_markup(
+                chat_id=update.effective_chat.id,
+                message_id=message_id,
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            logger.error(f"Failed to edit message to add button: {e}")
 
-# --- MODIFIED: Button Handler using context to retrieve file_id ---
+
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles callback queries, retrieving file_id from context."""
     query = update.callback_query
     await query.answer()
-
     data = query.data
     if data.startswith("get_thumb:"):
         message_id = int(data.split(":", 1)[1])
-        
-        # Retrieve the thumbnail_id from chat_data using the message_id
         thumbnail_id = context.chat_data.pop(message_id, None)
-
         if thumbnail_id:
             caption = f"✅ Here is the thumbnail.\n\n**File ID:**\n`{thumbnail_id}`"
-            await query.message.reply_photo(
-                photo=thumbnail_id,
-                caption=caption,
-                parse_mode=ParseMode.MARKDOWN
-            )
-            # Remove the button from the original message
+            await query.message.reply_photo(photo=thumbnail_id, caption=caption, parse_mode=ParseMode.MARKDOWN)
             await query.edit_message_reply_markup(reply_markup=None)
         else:
-            # Data expired or bot restarted, inform the user.
             await query.edit_message_text(text="This button has expired. Please send the video again.")
 
-# --- Other Media Handlers (Unchanged) ---
+
 async def sticker_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     sticker = update.message.sticker
     response_text = f"🎨 **Sticker File ID:**\n`{sticker.file_id}`"
     await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
+
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_id = update.message.photo[-1].file_id
@@ -167,7 +153,7 @@ def main() -> None:
 
     application.add_handler(CallbackQueryHandler(button_callback_handler))
     
-    port = int(os.environ.get('PORT', '8443'))
+    port = int(os.environ.get('PORT', '10000')) # Render might use a different port
     logger.info(f"Starting bot on port {port}")
     application.run_webhook(
         listen="0.0.0.0",
