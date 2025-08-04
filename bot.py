@@ -40,50 +40,48 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
-# --- CORRECTED id_handler ---
 async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles /id and /info, and intelligently extracts IDs from various contexts."""
     message = update.effective_message
     response_text = ""
-
-    # Case 1: The message is a reply to another message.
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
         response_text = f"👤 **User ID (from reply):** `{replied_user.id}`"
-    
-    # Case 2: The message is a forward.
-    # Use message.forward_origin which is the modern and safe way to check.
     elif message.forward_origin:
         forward_info = message.forward_origin
         if forward_info.type == 'user':
             response_text = f"👤 **Forwarded User ID:** `{forward_info.sender_user.id}`"
         elif forward_info.type == 'hidden_user':
-             response_text = f"👤 **Forwarded from a hidden user.**\n   - **Name:** {forward_info.sender_user_name}"
+            response_text = f"👤 **Forwarded from a hidden user.**\n   - **Name:** {forward_info.sender_user_name}"
         elif forward_info.type == 'channel':
             response_text = (
                 f"🌐 **Forwarded Channel Info**\n"
                 f"   - **Title:** {forward_info.chat.title}\n"
                 f"   - **Chat ID:** `{forward_info.chat.id}`"
             )
-    
-    # Case 3: It's just a simple command.
     else:
         user = update.effective_user
         response_text = f"👤 **Your User ID is:** `{user.id}`"
-
     await message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
 async def chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     await update.message.reply_text(f"🌐 **This Chat's ID is:**\n`{chat_id}`", parse_mode=ParseMode.MARKDOWN)
 
-async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TICKET_TYPE) -> None:
+# --- CORRECTED contact_handler ---
+async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles shared contacts, which can be users, bots, groups or channels."""
     contact = update.message.contact
-    chat_id = contact.user_id 
+    # user_id is the same as chat_id for shared contacts/chats
+    shared_id = contact.user_id 
+    
+    # A simple way to check if it's a channel/group vs a user. 
+    # Channels/Groups often don't have a last_name when shared this way.
     if contact.first_name and not contact.last_name:
-        response_text = f"🌐 **Shared Chat ID:** `{chat_id}`"
+        response_text = f"🌐 **Shared Chat/Channel Info**\n   - **Title:** {contact.first_name}\n   - **ID:** `{shared_id}`"
     else:
-        response_text = f"👤 **Shared User ID:** `{chat_id}`"
+        full_name = f"{contact.first_name} {contact.last_name or ''}".strip()
+        response_text = f"👤 **Shared User/Bot Info**\n   - **Name:** {full_name}\n   - **ID:** `{shared_id}`"
+    
     await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,24 +102,20 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
 
-# --- Main Bot Logic with simplified handlers ---
+# --- Main Bot Logic (Unchanged) ---
 def main() -> None:
     """Sets up and runs the bot."""
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler(("id", "info"), id_handler))
     application.add_handler(CommandHandler("chatid", chat_id_handler))
     
-    # Message handlers
     application.add_handler(MessageHandler(filters.VIDEO, video_handler))
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_handler))
     application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
-
-    # NEW: A single, robust handler for all forwarded messages
     application.add_handler(MessageHandler(filters.FORWARDED, id_handler))
     
     port = int(os.environ.get('PORT', '10000'))
