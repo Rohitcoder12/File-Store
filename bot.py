@@ -3,7 +3,16 @@
 import logging
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
+# NEW: Import PicklePersistence
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+    CallbackQueryHandler,
+    PicklePersistence
+)
 from telegram.constants import ParseMode
 
 # --- Configuration (Unchanged) ---
@@ -75,71 +84,72 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         response_text = f"👤 **Shared User ID:** `{chat_id}`"
     await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
-
-# --- CORRECTED video_handler ---
+# --- The logic for these two handlers is now reliable thanks to persistence ---
 async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles incoming videos, storing thumbnail_id in context."""
     video = update.message.video
     response_text = f"✅ Video received!\n\n📹 **Video File ID:**\n`{video.file_id}`"
-
-    # First, send the message without a button
-    sent_message = await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
     
-    # Now, if there's a thumbnail, edit the message to add the button
-    if video.thumbnail and sent_message:
-        thumbnail_file_id = video.thumbnail.file_id
+    reply_markup = None
+    if video.thumbnail:
+        # We send the message and get its ID to use as a key
+        sent_message = await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
         message_id = sent_message.message_id
         
-        # --- THIS IS THE FIX ---
-        # Directly assign the key-value pair. Do NOT re-assign context.chat_data.
-        context.chat_data[message_id] = thumbnail_file_id
+        # Store the thumbnail_id in persistent chat_data
+        context.chat_data[message_id] = video.thumbnail.file_id
         
         button = InlineKeyboardButton("Extract Thumbnail 🖼️", callback_data=f"get_thumb:{message_id}")
         reply_markup = InlineKeyboardMarkup([[button]])
-        
-        try:
-            await context.bot.edit_message_reply_markup(
-                chat_id=update.effective_chat.id,
-                message_id=message_id,
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            logger.error(f"Failed to edit message to add button: {e}")
 
+        # Edit the message to add the button
+        await sent_message.edit_reply_markup(reply_markup=reply_markup)
+    else:
+        # If no thumbnail, just send the text
+        await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
 async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles callback queries, retrieving file_id from context."""
     query = update.callback_query
     await query.answer()
     data = query.data
+
     if data.startswith("get_thumb:"):
         message_id = int(data.split(":", 1)[1])
+        # Retrieve the thumbnail_id from our persistent storage
         thumbnail_id = context.chat_data.pop(message_id, None)
+
         if thumbnail_id:
             caption = f"✅ Here is the thumbnail.\n\n**File ID:**\n`{thumbnail_id}`"
             await query.message.reply_photo(photo=thumbnail_id, caption=caption, parse_mode=ParseMode.MARKDOWN)
             await query.edit_message_reply_markup(reply_markup=None)
         else:
-            await query.edit_message_text(text="This button has expired. Please send the video again.")
-
+            await query.edit_message_text(text="This button has expired or the bot was recently updated. Please send the video again.")
 
 async def sticker_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     sticker = update.message.sticker
     response_text = f"🎨 **Sticker File ID:**\n`{sticker.file_id}`"
     await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
-
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     file_id = update.message.photo[-1].file_id
     response_text = f"🖼️ **Photo File ID:**\n`{file_id}`"
     await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
 
-
-# --- Main Bot Logic (Unchanged) ---
+# --- Main Bot Logic with Persistence ---
 def main() -> None:
-    """Sets up and runs the bot."""
-    application = Application.builder().token(BOT_TOKEN).build()
+    """Sets up and runs the bot with persistence."""
+    # NEW: Create a persistence object
+    # This will create a file named "bot_persistence" in your project directory
+    persistence = PicklePersistence(filepath="bot_persistence")
+
+    # NEW: Add the persistence object to the Application Builder
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .persistence(persistence)
+        .build()
+    )
     
+    # Register all handlers (unchanged)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler(("id", "info"), id_handler))
@@ -153,7 +163,7 @@ def main() -> None:
 
     application.add_handler(CallbackQueryHandler(button_callback_handler))
     
-    port = int(os.environ.get('PORT', '10000')) # Render might use a different port
+    port = int(os.environ.get('PORT', '10000'))
     logger.info(f"Starting bot on port {port}")
     application.run_webhook(
         listen="0.0.0.0",
