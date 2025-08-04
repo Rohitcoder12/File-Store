@@ -29,7 +29,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
         f"👋 Hello, {user.full_name}!\n\n"
-        "I am the Id Extractor Bot. I can get User, Chat, Photo, and Sticker IDs for you.\n\n"
+        "I am the Id Extractor Bot. I can get User, Chat, Photo, Sticker, and Video IDs for you.\n\n"
         "Type /help to see everything I can do!"
     )
 
@@ -43,6 +43,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "   - Forward any message to me to get the original sender's ID and the chat's ID (if from a channel/group).\n\n"
         "🔹 `/chatid`\n"
         "   - Get the ID of the current chat (group or private).\n\n"
+        "📹 **Send me any video**\n"
+        "   I'll reply with its `file_id` and thumbnail details.\n\n"
         "📷 **Send me any photo**\n"
         "   I'll reply with its `file_id` and other details.\n\n"
         "🎨 **Send me any sticker**\n"
@@ -54,8 +56,7 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     """Handles /id and /info, and intelligently extracts IDs from various contexts."""
     message = update.effective_message
     response_text = ""
-
-    # Case 1: Replying to a message
+    # This logic remains the same
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
         response_text = (
@@ -65,10 +66,7 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         )
         if replied_user.username:
             response_text += f"   - **Username:** @{replied_user.username}\n"
-
-    # Case 2: Forwarded message
     elif message.forward_from or message.forward_from_chat:
-        # If forwarded from a user
         if message.forward_from:
             fwd_user = message.forward_from
             response_text = (
@@ -76,7 +74,6 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 f"   - **Name:** {fwd_user.full_name}\n"
                 f"   - **User ID:** `{fwd_user.id}`\n"
             )
-        # If forwarded from a channel/group
         if message.forward_from_chat:
             fwd_chat = message.forward_from_chat
             response_text += (
@@ -85,12 +82,9 @@ async def id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 f"   - **Chat ID:** `{fwd_chat.id}`\n"
                 f"   - **Type:** {fwd_chat.type.capitalize()}\n"
             )
-
-    # Case 3: Just the /id command sent by a user
     else:
         user = update.effective_user
         response_text = f"👤 **Your User ID is:** `{user.id}`"
-
     await message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
 
 async def chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -98,11 +92,34 @@ async def chat_id_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     chat_id = update.effective_chat.id
     await update.message.reply_text(f"🌐 **This Chat's ID is:**\n`{chat_id}`", parse_mode=ParseMode.MARKDOWN)
 
+# --- NEW: Handler for Videos ---
+async def video_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles incoming videos and sends back their file_id and thumbnail info."""
+    user = update.effective_user
+    logger.info(f"User {user.full_name} ({user.id}) sent a video.")
+
+    video = update.message.video
+    response_text = (
+        f"✅ Video received!\n\n"
+        f"📹 **Video File ID:**\n`{video.file_id}`\n\n"
+        f"⏱️ **Duration:** {video.duration} seconds\n"
+        f"📐 **Dimensions:** {video.width}x{video.height}\n"
+    )
+
+    if video.thumbnail:
+        response_text += (
+            f"\n🖼️ **Thumbnail File ID:**\n"
+            f"`{video.thumbnail.file_id}`"
+        )
+    
+    await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
+
+
 async def sticker_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles incoming stickers and sends back their file_id."""
+    # This function remains the same
     user = update.effective_user
     logger.info(f"User {user.full_name} ({user.id}) sent a sticker.")
-
     sticker = update.message.sticker
     response_text = (
         f"✅ Sticker received!\n\n"
@@ -111,12 +128,12 @@ async def sticker_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     if sticker.set_name:
         response_text += f"\n\n✨ **Set Name:** `{sticker.set_name}`"
-    
     await update.message.reply_text(text=response_text, parse_mode=ParseMode.MARKDOWN)
+
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles incoming photos and sends back their file_id."""
-    # This function remains the same as your original
+    # This function remains the same
     user = update.effective_user
     logger.info(f"User {user.full_name} ({user.id}) sent a photo.")
     highest_res_photo = update.message.photo[-1]
@@ -143,12 +160,15 @@ def main() -> None:
     # Register command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler(("id", "info"), id_handler)) # Handles /id and /info
+    application.add_handler(CommandHandler(("id", "info"), id_handler))
     application.add_handler(CommandHandler("chatid", chat_id_handler))
     
-    # Register message handlers
+    # --- MODIFIED: Register message handlers ---
+    # The order is important. We check for a video first.
+    application.add_handler(MessageHandler(filters.VIDEO, video_handler))
     application.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     application.add_handler(MessageHandler(filters.Sticker.ALL, sticker_handler))
+    
     # This handler is a catch-all for forwarded messages that aren't commands
     application.add_handler(MessageHandler(filters.FORWARDED, id_handler))
     
